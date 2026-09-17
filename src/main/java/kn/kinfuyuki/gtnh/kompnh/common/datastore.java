@@ -84,7 +84,7 @@ public class datastore {
 
 	/*
 	* .idx sample structure:
-	* <itemname> <item line>
+	* <itemname> <byte start> <byte end>
 	* */
 	/*
 	* .store sample structure:
