@@ -1,100 +1,126 @@
 package kn.kinfuyuki.gtnh.kompnh.common;
 
 import java.io.File;
-import java.io.RandomAccessFile;import java.util.ArrayList;import java.util.List;import java.util.Scanner;
-import java.util.regex.MatchResult;
-import java.util.stream.Stream;
+import java.io.FileNotFoundException;
+import java.io.RandomAccessFile;
+import java.util.*;
 
 import static kn.kinfuyuki.gtnh.kompnh.serverp.datapath;
 
 public class datastore {
-	private static final String I=".idx",S=".store";
-	public final String ID;
-	public final String root;
-	public datastore(String storageid){
-		ID=storageid;
-		root=datapath + "/" + ID + "/root";
-	}
-	public static class packet{
-		public long amount;
-		public String ID;
-		public long[] bytestartend;
-	}
-	public packet fetch (String str,int amount){
-		packet result=new packet();
-		
-		// 0=mod 1=item 2=damage 3=nbt
-		String[] path=str.split("@",4);
-		try{
-		if(
-			!new File(root+path[0]+I).createNewFile()&&
-			!new File(root+path[0]+S).createNewFile()
-		){
-		//byte index of the item, where its data starts and end. you need 8 hexabytes of data in .store to run out of byte indexes with a long integer, ur fine
-			List<long[]> indexes=new ArrayList<>(0);
-			{
-			Stream<MatchResult> f1;
-			{Scanner item=new Scanner(new File(root+path[0]+I));
-			f1 = item.findAll(path[1]+" .*");}
-			f1.forEach(
-			i->{
-			String[] tmp= i.group().split(" ");
-			indexes.add(new long[]{Long.parseLong(tmp[1]), Long.parseLong(tmp[2])});}
-			);}
-			if (indexes.size()==0){return null;}
-			indexes.forEach(i ->{RandomAccessFile f2=null;try{
-			String block ;{f2
-			=new RandomAccessFile(root+path[0]+S,"r");
-			f2.seek(i[0]);
-			byte[] buffer=new byte[(int)(i[1]-i[0])];
-			f2.readFully(buffer);f2.close();block=new String(buffer);}
-			String[] parts=block.split(" ",3);
-			if (parts[0].equals(path[2])&&parts[2].equals(path[3])){
-				result.amount=Long.parseLong(parts[1]);
-				result.ID=this.ID;
-				result.bytestartend=i;
-				
-			}
-			}catch (Exception e){}
-			
-			});
-			return result;
-			
-			
-		}
+    public final String ID;
+    public final String root;
+    public static final String emptysector="                ";
+    public static final char datastartflag='0',datacontinueflag='1',dataendflag='2',dataemptyflag=' ';
+    public Map<String, Map<String,long[]>> indices=new HashMap<>(){};
+    public datastore(String storageid){
+        ID=storageid;
+        root=datapath + "/" + ID + "/root";
+        if (indices.isEmpty()){
+            try {
+                updateindices();
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }
+    }
 
-		} catch (Exception e) {}
-		return null;
-	}
+    public static class packet{
+        public long amount;
+        public String ID;
+    }
+    public void updateindices() throws Exception {
+        File idxfile=new File(root+"/.idx");
+        if (!idxfile.createNewFile()){
+
+        }
+        else{
+            File rootfolder=new File(root);
+            File[] directories=rootfolder.listFiles(File::isDirectory);
+            assert directories != null;
+            for (File directory : directories) {
+                long [] startingsectors=findsectorsbyflag(directory,'0');
+                long [] endingsectors=findsectorsbyflag(directory,'2');
+
+            }
+        }
+    }
+    public packet fetch(String str,int amount){
+        // 0=mod 1=item 2=damage 3=nbt
+        String[] path=str.split("@",4);
 
 
+        return null;
+    }
+    private long[] findsectorsbyflag(File path,char flag) throws Exception {
+        RandomAccessFile file=new RandomAccessFile(path,"r");
+        long length= file.length();
+        long [] indices=new long[Math.toIntExact(length / 16)];
+        int amount=0;
+        for (long i = 0; i < length; i+=16) {
+            file.seek(i);
+            if (file.read()==flag){
+                indices[amount]=i;
+                amount+=1;
+            }
+        }
+        indices=Arrays.copyOf(indices,amount);
+        file.close();
+        return indices;
+    }
+    // for single reads, fast for when you need to read single chunks of the file.
+    private static String readData(File path, long sectorstart, long sectorend) throws Exception{
+        String data="";
+        RandomAccessFile file=new RandomAccessFile(path,"r");
 
+        for (long i = sectorstart; i < sectorend;i+=16) {
 
-	/*
-	* path structure
-	*
-	* <world>/kompnh/<id>
-	* |- root
-	* |		|- <modname>
-	* |		|	|- .idx
-	* |		|	|- .store
-	* |- meta
-	* |		|- <modname>'<itemname>
-	* */
+        }
+        file.close();
+        return data;
+    }
+    // for multiple reads, fast for multiple reads of the file with a single IO call.
+    private static String[] readDataArray (File path, long[] sectorstarts, long[] sectorends) throws Exception {
+        String[] datas = new String[sectorstarts.length];
+        RandomAccessFile file=new RandomAccessFile(path,"r");
+        for (int i = 0; i < sectorstarts.length; i++) {
+            long sectorstart=sectorstarts[i];
+            long sectorend=sectorends[i];
+            String data="";
+                for (long j = sectorstart; j < sectorend;j+=16) {
+                    char[] buffer=new char[15];//ignoring flag
+                }
+        }
+        file.close();
+        return datas;
+    }
+    private void writeSector(long sector, String data){
 
-	/*
-	* .idx sample structure:
-	* <itemname> <byte start> <byte end>
-	* */
-	/*
-	* .store sample structure:
-	* <damage> <amount> <nbt>
-	* */
+    }
 
-	/* THIS IS STILL A PLANNED FEATURE FOR FUTURE OPTIMIZATION, IT WILL ONLY STORE AMOUNT LONGS AND SEARCH BY INDEX (aka bytes on pos*8 to pos*8+3)
-	* meta item sample structure (this will only accept items without nbt data):
-	* <amount of item with damage 0><amount of item with damage 1><amount of item with damage 2>
-	* ...
-	* */
+    /*
+    * path structure
+    *
+    * <world>/kompnh/<id>
+    * |- root
+    * |       |- <modname>
+    * |- meta
+    * |       |- <modname>'<itemname>
+    * */
+
+    /*
+    * .idx sample structure:
+    * <itemname> <starting sector> <ending sector>
+    * */
+    /*
+    * .store sample structure:
+    * <damage> <amount> <nbt>
+    * */
+
+    /* THIS IS STILL A PLANNED FEATURE FOR FUTURE OPTIMIZATION, IT WILL ONLY STORE AMOUNT LONGS AND SEARCH BY INDEX (aka bytes on pos*8 to pos*8+3)
+    * meta item sample structure (this will only accept items without nbt data):
+    * <amount of item with damage 0><amount of item with damage 1><amount of item with damage 2>
+    * ...
+    * */
 
 }
